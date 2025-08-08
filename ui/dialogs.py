@@ -96,9 +96,9 @@ class SettingsDialog(QDialog):
         
         # Gemini API Key
         gemini_layout = QHBoxLayout()
-    gemini_api_label = QLabel("Gemini AI API Key:")
-    gemini_api_label.setToolTip("Your Google AI Studio API Key for Gemini.")
-    gemini_layout.addWidget(gemini_api_label)
+        gemini_api_label = QLabel("Gemini AI API Key:")
+        gemini_api_label.setToolTip("Your Google AI Studio API Key for Gemini.")
+        gemini_layout.addWidget(gemini_api_label)
         self.gemini_api_key_input = QLineEdit()
         self.gemini_api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.gemini_api_key_input.setToolTip("Your Google AI Studio API Key for Gemini.")
@@ -108,9 +108,9 @@ class SettingsDialog(QDialog):
 
         # Gemini Model Selection
         gemini_model_layout = QHBoxLayout()
-    gemini_model_label = QLabel("Gemini Model:")
-    gemini_model_label.setToolTip("Select the Gemini API model to use.")
-    gemini_model_layout.addWidget(gemini_model_label)
+        gemini_model_label = QLabel("Gemini Model:")
+        gemini_model_label.setToolTip("Select the Gemini API model to use.")
+        gemini_model_layout.addWidget(gemini_model_label)
         self.gemini_model_selector = QComboBox()
         self.gemini_model_selector.addItems(["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "custom"])
         self.gemini_model_selector.setToolTip("Select the Gemini API model to use.")
@@ -137,9 +137,9 @@ class SettingsDialog(QDialog):
 
         # Spotify Client ID
         spotify_id_layout = QHBoxLayout()
-    spotify_id_label = QLabel("Spotify Client ID:")
-    spotify_id_label.setToolTip("Your Client ID from the Spotify Developer Dashboard.")
-    spotify_id_layout.addWidget(spotify_id_label)
+        spotify_id_label = QLabel("Spotify Client ID:")
+        spotify_id_label.setToolTip("Your Client ID from the Spotify Developer Dashboard.")
+        spotify_id_layout.addWidget(spotify_id_label)
         self.spotify_id_input = QLineEdit()
         self.spotify_id_input.setToolTip("Your Client ID from the Spotify Developer Dashboard.")
         self.spotify_id_input.setText(config.get_setting("API_KEYS", "spotify_client_id"))
@@ -148,23 +148,22 @@ class SettingsDialog(QDialog):
 
         # Spotify Client Secret
         spotify_secret_layout = QHBoxLayout()
-    spotify_secret_label = QLabel("Spotify Client Secret:")
-    spotify_secret_label.setToolTip("Your Client Secret from the Spotify Developer Dashboard.")
-    spotify_secret_layout.addWidget(spotify_secret_label)
+        spotify_secret_label = QLabel("Spotify Client Secret:")
+        spotify_secret_label.setToolTip("Your Client Secret from the Spotify Developer Dashboard.")
+        spotify_secret_layout.addWidget(spotify_secret_label)
         self.spotify_secret_input = QLineEdit()
         self.spotify_secret_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.spotify_secret_input.setToolTip("Your Client Secret from the Spotify Developer Dashboard.")
         self.spotify_secret_input.setText(config.get_setting("API_KEYS", "spotify_client_secret"))
         spotify_secret_layout.addWidget(self.spotify_secret_input)
         layout.addLayout(spotify_secret_layout)
-        
 
 
         # System Instructions for AI
         sysinst_layout = QVBoxLayout()
-    sysinst_label = QLabel("AI System Instructions:")
-    sysinst_label.setToolTip("Custom system instructions for the AI assistant.")
-    sysinst_layout.addWidget(sysinst_label)
+        sysinst_label = QLabel("AI System Instructions:")
+        sysinst_label.setToolTip("Custom system instructions for the AI assistant.")
+        sysinst_layout.addWidget(sysinst_label)
         self.system_instructions_input = QLineEdit()
         self.system_instructions_input.setPlaceholderText("e.g. You are the AI inside a CD burner app...")
         self.system_instructions_input.setToolTip("Custom system instructions for the AI assistant.")
@@ -177,13 +176,13 @@ class SettingsDialog(QDialog):
             QDialogButtonBox.StandardButton.Apply |
             QDialogButtonBox.StandardButton.Cancel
         )
-    button_box.button(QDialogButtonBox.StandardButton.Apply).setToolTip("Apply changes without closing the dialog.")
-    button_box.button(QDialogButtonBox.StandardButton.Ok).setToolTip("Apply changes and close the dialog.")
-    button_box.button(QDialogButtonBox.StandardButton.Cancel).setToolTip("Cancel and close the dialog without saving changes.")
-    button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.apply_settings)
-    button_box.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.ok_and_close)
-    button_box.rejected.connect(self.reject)
-    layout.addWidget(button_box)
+        button_box.button(QDialogButtonBox.StandardButton.Apply).setToolTip("Apply changes without closing the dialog.")
+        button_box.button(QDialogButtonBox.StandardButton.Ok).setToolTip("Apply changes and close the dialog.")
+        button_box.button(QDialogButtonBox.StandardButton.Cancel).setToolTip("Cancel and close the dialog without saving changes.")
+        button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.apply_settings)
+        button_box.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.ok_and_close)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
 
     def on_gemini_model_changed(self, text):
         self.custom_gemini_model_input.setVisible(text == "custom")
