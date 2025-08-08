@@ -450,7 +450,8 @@ class AlphaBurnApp(QMainWindow):
                     'You can interact with the application to start burns, set settings, and answer questions about features (e.g., "what does finalize disc do?"). '
                     'You always filter your responses to only show the text output, and prefix your answers with "Alpha:". '
                     'If you need instructions for how to use the app, you have access to them. '
-                    'You can move files, manage directories, and help the user with all music and disc operations.'
+                    'You can move files, manage directories, and help the user with all music and disc operations. '
+                    'You are capable of downloading playlists by genre or mood from YouTube (using yt-dlp), not just Spotify playlists. If the user requests a playlist of a specific genre, you can search YouTube and download it.'
                 )
 
             self.gemini_chat_session = model.start_chat(history=[])
@@ -501,8 +502,10 @@ class AlphaBurnApp(QMainWindow):
         self.spinner_label.setVisible(False)
         if hasattr(self, 'spinner_movie') and self.spinner_movie:
             self.spinner_movie.stop()
-        # Only show the AI's text output, with prefix 'Alpha:'
-        self.chat_history.append(f"<span style='color:#43A047;'><b>Alpha:</b> {response}</span>")
+        # Remove any leading 'Alpha:' (case-insensitive, with or without space) from the response to avoid double prefix
+        import re
+        clean_response = re.sub(r'^(alpha:|alpha\s*:)\s*', '', response, flags=re.IGNORECASE)
+        self.chat_history.append(f"<span style='color:#43A047;'><b>Alpha:</b> {clean_response}</span>")
         self.chat_input.setEnabled(True)
         self.send_chat_button.setEnabled(True)
         self.statusBar().showMessage("Alpha response received.", 5000)

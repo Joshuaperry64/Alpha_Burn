@@ -105,6 +105,11 @@ class AdvancedBurnSettingsDialog(QDialog):
         super().accept()
 
 class SettingsDialog(QDialog):
+    def browse_for_localmusic_folder(self):
+        from PyQt6.QtWidgets import QFileDialog
+        folder = QFileDialog.getExistingDirectory(self, "Select Local Music Folder", "")
+        if folder:
+            self.localmusic_input.setText(folder)
     """Settings dialog now reads from and writes to config.ini."""
     def __init__(self, parent=None):
         super().__init__(parent)
