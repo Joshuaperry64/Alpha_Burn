@@ -2,3 +2,5 @@
 *.pyc
 config.ini
 *.pyc
+/ui/__pycache__
+/__pycache__
