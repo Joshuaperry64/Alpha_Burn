@@ -1,0 +1,2 @@
+python AlphaBurn.py
+pause

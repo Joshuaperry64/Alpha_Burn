@@ -1,0 +1,98 @@
+Alpha_Burn: Project Roadmap & Development Plan
+Project Status: Active Development
+Lead Architect: Alpha
+Operator: Joshua Perry
+
+Phase 1: Core Foundation (Implemented)
+[✓] Project Initialization: Renamed from "Sonic Forge" to "Alpha_Burn".
+
+[✓] Ingestion Engine: Core download functionality using yt-dlp.
+
+Multi-threaded operation to prevent UI freezing.
+
+Handles YouTube, SoundCloud, and other compatible URLs.
+
+Transcodes to 320kbps MP3.
+
+[✓] Metamorph AI Tagger: Automated metadata and album art embedding.
+
+Integrates with MusicBrainz database for high-quality, accurate tags.
+
+Handles title, artist, album, year, genre, and track number.
+
+Downloads and embeds front cover art.
+
+[✓] Library Core: Foundational music library display.
+
+Table view for displaying tagged music.
+
+[✓] Cinder Burn Engine (UI): User interface for all burning operations is in place.
+
+[✓] CD Ripping: Functionality to rip audio tracks from a physical CD.
+
+[✓] Robust Error Handling: Worker-thread-based architecture prevents crashes on download/rip/tagging errors. User-friendly dialogs report issues.
+
+[✓] Persistent Settings: Application settings (API keys, etc.) are saved and loaded.
+
+Phase 2: Feature Expansion (Implemented in this update)
+[✓] Advanced Burn Control: A dedicated dialog for advanced burning parameters.
+
+Write Speed Selection
+
+Burn-Proof Toggle
+
+Test Mode Simulation
+
+[✓] Burn Queue Presets: Ability to save, load, and delete custom burn queue "loadouts".
+
+Allows for easy switching between different CD compilation projects.
+
+[✓] Enhanced UI & UX:
+
+Comprehensive tooltips for all interactive elements.
+
+Persistent developer credit in the status bar.
+
+Integrated roadmap access via a menu action.
+
+[✓] File Management Utilities:
+
+Automated install.bat for dependency installation.
+
+generate_filetree.bat for visualizing project structure.
+
+Phase 3: AI & Automation (Future Integrations)
+[ ] Full Muse AI Curator Integration: Activate the AI prompt for intelligent automation.
+
+Requires: A valid API key for a backend generative AI service.
+
+Functionality:
+
+"burn a CD of new rock music" -> AI finds recent rock songs in the library, adds them to the queue, and can initiate the burn.
+
+"create a playlist of my top rated songs" -> AI interacts with a future rating system to build a queue.
+
+[ ] Advanced Library Management:
+
+Persistent Library Database (e.g., SQLite) to store metadata locally, preventing re-tagging and enabling faster startup.
+
+Song rating system (1-5 stars).
+
+Manual metadata editor.
+
+[ ] Cinder Burn Engine (Logic):
+
+Integration with a backend burning library (like pycdlib) to create ISO files.
+
+Executing the command-line burn process to write the ISO to disc.
+
+[ ] Spotify Integration:
+
+Ability to parse a Spotify playlist URL, identify the tracks, and find/download them from YouTube.
+
+Optimization Suggestions
+Database: For large music libraries, transitioning from an in-memory model to an SQLite database will significantly improve performance and scalability.
+
+Artwork Caching: Cache downloaded album art to reduce redundant network requests.
+
+Configuration File: Externalize settings like download paths and formats into a user-editable config.ini file for greater flexibility.

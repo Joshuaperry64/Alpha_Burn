@@ -1,0 +1,5 @@
+yt-dlp
+PyQt6
+mutagen
+musicbrainzngs
+pycdlib
