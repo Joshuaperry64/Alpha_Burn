@@ -14,20 +14,33 @@ class GeminiWorker(QObject):
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel(self.model_name)
         self._conversation = []
-        # Send system prompt as initial user message (Gemini API does not support 'system' role)
+        self._system_prompt_sent = False
+        # Only send system instructions as the first user message if conversation is empty
         if self.system_instructions:
             self._conversation.append({"role": "user", "parts": [self.system_instructions]})
+            self._system_prompt_sent = True
 
     def send_message(self, message):
         try:
+            # Only send system instructions if conversation is empty and not already sent
+            if not self._conversation and self.system_instructions and not self._system_prompt_sent:
+                self._conversation.append({"role": "user", "parts": [self.system_instructions]})
+                self._system_prompt_sent = True
             self._conversation.append({"role": "user", "parts": [message]})
             response = self.model.generate_content(self._conversation)
-            # Gemini API may return a response object with .text or .candidates[0].text
+            # Try to extract the actual reply text
             text = getattr(response, 'text', None)
-            if text is None and hasattr(response, 'candidates') and response.candidates:
-                text = response.candidates[0].text
-            else:
-                text = str(response)
+            if not text and hasattr(response, 'candidates') and response.candidates:
+                candidate = response.candidates[0]
+                # Gemini 1.5/2.0: candidate.content.parts[0].text
+                if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts') and candidate.content.parts:
+                    part = candidate.content.parts[0]
+                    if isinstance(part, dict) and 'text' in part:
+                        text = part['text']
+                    elif hasattr(part, 'text'):
+                        text = part.text
+            if not text:
+                text = "(No response text found)"
             self._conversation.append({"role": "model", "parts": [text]})
             self.response_received.emit(text)
         except Exception as e:

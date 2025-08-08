@@ -1,0 +1,90 @@
+/* AlphaBurn Futuristic High-Tech Theme */
+
+QWidget {
+    background-color: #181c24;
+    color: #e0e6f0;
+    font-family: 'Segoe UI', 'Roboto', 'Arial', sans-serif;
+    font-size: 12.5pt;
+}
+
+QMainWindow, QDialog {
+    background-color: #181c24;
+    border: 1px solid #23283a;
+    border-radius: 8px;
+}
+
+QPushButton {
+    background-color: #23283a;
+    color: #00ffe7;
+    border: 1.5px solid #00ffe7;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+QPushButton:hover {
+    background-color: #00ffe7;
+    color: #181c24;
+}
+QPushButton:pressed {
+    background-color: #00bfae;
+    color: #fff;
+}
+
+QLineEdit, QComboBox, QTableView, QTableWidget, QListWidget, QTextEdit {
+    background-color: #23283a;
+    color: #e0e6f0;
+    border: 1.5px solid #00ffe7;
+    border-radius: 5px;
+    selection-background-color: #00ffe7;
+    selection-color: #181c24;
+}
+
+QLabel {
+    color: #00ffe7;
+    font-weight: 500;
+}
+
+QProgressBar {
+    background-color: #23283a;
+    border: 1.5px solid #00ffe7;
+    border-radius: 5px;
+    text-align: center;
+    color: #00ffe7;
+}
+QProgressBar::chunk {
+    background-color: #00ffe7;
+    border-radius: 5px;
+}
+
+QSlider::groove:horizontal {
+    border: 1px solid #00ffe7;
+    height: 8px;
+    background: #23283a;
+    border-radius: 4px;
+}
+QSlider::handle:horizontal {
+    background: #00ffe7;
+    border: 1px solid #23283a;
+    width: 18px;
+    margin: -5px 0;
+    border-radius: 9px;
+}
+
+QCheckBox, QRadioButton {
+    color: #00ffe7;
+}
+
+QToolTip {
+    background-color: #23283a;
+    color: #00ffe7;
+    border: 1px solid #00ffe7;
+    border-radius: 4px;
+    padding: 4px;
+    font-size: 11pt;
+}
+
+/* Remove focus rectangle for a cleaner look */
+*:focus {
+    outline: none;
+}

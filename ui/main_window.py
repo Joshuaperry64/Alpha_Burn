@@ -40,6 +40,68 @@ class StarRatingDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 class AlphaBurnApp(QMainWindow):
+    # Store CD state
+    cd_state = {
+        'drive': None,
+        'space_mb': None,
+        'finalized': None,
+        'rewritable': None,
+        'files': [],
+        'needs_wipe': False
+    }
+    # --- CD Drive Controls ---
+    def eject_selected_drive(self):
+        drive = self.drive_selector.currentText()
+        if not drive or "No drives" in drive:
+            self.statusBar().showMessage("No drive selected.")
+            return
+        # TODO: Implement platform-specific ejection
+        self.statusBar().showMessage(f"Ejecting drive {drive} (not yet implemented)")
+
+    def wipe_selected_drive(self):
+        drive = self.drive_selector.currentText()
+        if not drive or "No drives" in drive:
+            self.statusBar().showMessage("No drive selected.")
+            return
+        # TODO: Implement CD-RW wipe/erase
+        self.statusBar().showMessage(f"Wiping drive {drive} (not yet implemented)")
+
+    def read_selected_cd(self):
+        drive = self.drive_selector.currentText()
+        if not drive or "No drives" in drive:
+            self.statusBar().showMessage("No drive selected.")
+            return
+        # Simulate reading CD state (replace with real implementation)
+        import random
+        self.cd_state = {
+            'drive': drive,
+            'space_mb': random.randint(0, 700),
+            'finalized': random.choice([True, False]),
+            'rewritable': random.choice([True, False]),
+            'files': [f"Track{i+1}.mp3" for i in range(random.randint(0, 10))],
+            'needs_wipe': random.choice([True, False])
+        }
+        msg = f"CD in {drive}: {self.cd_state['space_mb']}MB free, Finalized: {self.cd_state['finalized']}, Rewritable: {self.cd_state['rewritable']}, Files: {self.cd_state['files']}, Needs wipe: {self.cd_state['needs_wipe']}"
+        self.statusBar().showMessage(msg)
+        # Update CD content table
+        files = self.cd_state['files']
+        self.cd_content_table.setRowCount(len(files))
+        for i, fname in enumerate(files):
+            from PyQt6.QtWidgets import QTableWidgetItem
+            self.cd_content_table.setItem(i, 0, QTableWidgetItem(fname))
+
+    # --- Audio Player Controls ---
+    def play_selected_audio(self):
+        # TODO: Implement audio playback for selected track
+        self.statusBar().showMessage("Play audio (not yet implemented)")
+
+    def pause_audio(self):
+        # TODO: Implement pause
+        self.statusBar().showMessage("Pause audio (not yet implemented)")
+
+    def stop_audio(self):
+        # TODO: Implement stop
+        self.statusBar().showMessage("Stop audio (not yet implemented)")
     def showEvent(self, event):
         super().showEvent(event)
         self.showMaximized()
@@ -47,6 +109,12 @@ class AlphaBurnApp(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"{constants.APP_NAME} v{constants.APP_VERSION}")
         self.showMaximized()
+
+        # Apply futuristic stylesheet
+        qss_path = os.path.join(os.path.dirname(__file__), 'alphaburn_theme.qss')
+        if os.path.exists(qss_path):
+            with open(qss_path, 'r', encoding='utf-8') as f:
+                self.setStyleSheet(f.read())
 
         self.download_path = config.get_setting('PATHS', 'DownloadFolder')
         if not os.path.exists(self.download_path):
@@ -115,8 +183,10 @@ class AlphaBurnApp(QMainWindow):
         self.library_table.setColumnWidth(5, constants.RATING_WIDTH)
 
     def load_library_from_db(self):
+        print("[DEBUG] Loading library from DB...")
         self.library_model.removeRows(0, self.library_model.rowCount())
         songs = database.get_all_songs()
+        print(f"[DEBUG] Songs from DB: {songs}")
         for song_data in songs:
             row = [QStandardItem(str(field)) for field in song_data]
             self.library_model.appendRow(row)
@@ -130,11 +200,13 @@ class AlphaBurnApp(QMainWindow):
         self.library_worker.start()
 
     def on_library_scan_finished(self, found_new):
+        print(f"[DEBUG] Library scan finished. Found new: {found_new}")
         if found_new > 0:
             QMessageBox.information(self, "Rescan Complete", f"Found and added {found_new} new tracks.")
             self.load_library_from_db()
         else:
             QMessageBox.information(self, "Rescan Complete", "No new tracks were found.")
+            self.load_library_from_db()
         self.statusBar().showMessage("Ready.", 3000)
         self.rescan_library_action.setEnabled(True)
 
@@ -285,6 +357,12 @@ class AlphaBurnApp(QMainWindow):
         self.send_chat_button.setEnabled(False)
         self.statusBar().showMessage(f"Asking Gemini: '{prompt}'...")
 
+        # Show thinking/loading indicator
+        self.thinking_label.setVisible(True)
+        self.spinner_label.setVisible(True)
+        if hasattr(self, 'spinner_movie') and self.spinner_movie:
+            self.spinner_movie.start()
+
         api_key = config.get_setting("API_KEYS", "gemini_api_key")
         model_name = config.get_setting("API_KEYS", "gemini_model", "gemini-1.5-pro")
         system_instructions = config.get_setting("API_KEYS", "system_instructions", "You are the AI assistant inside this CD burner application. You can search for music, download playlists, and assist with burning discs. Respond as a helpful in-app assistant.")
@@ -293,14 +371,27 @@ class AlphaBurnApp(QMainWindow):
             self.chat_input.setEnabled(True)
             self.send_chat_button.setEnabled(True)
             self.statusBar().showMessage("Ready.")
+            self.thinking_label.setVisible(False)
+            self.spinner_label.setVisible(False)
+            if hasattr(self, 'spinner_movie') and self.spinner_movie:
+                self.spinner_movie.stop()
             return
+
+        # Prepend CD state to the prompt for AI context
+        cd_state_str = f"[CD STATE] Drive: {self.cd_state.get('drive')}, Space: {self.cd_state.get('space_mb')}MB, Finalized: {self.cd_state.get('finalized')}, Rewritable: {self.cd_state.get('rewritable')}, Files: {self.cd_state.get('files')}, Needs wipe: {self.cd_state.get('needs_wipe')}\n"
+        full_prompt = cd_state_str + prompt
 
         self.gemini_worker = GeminiWorker(api_key, model_name, system_instructions)
         self.gemini_worker.response_received.connect(self.on_gemini_response_received)
         self.gemini_worker.error_occurred.connect(self.on_gemini_error_occurred)
-        self.gemini_worker.send_message(prompt)
+        self.gemini_worker.send_message(full_prompt)
 
     def on_gemini_response_received(self, response):
+        # Hide thinking/loading indicator
+        self.thinking_label.setVisible(False)
+        self.spinner_label.setVisible(False)
+        if hasattr(self, 'spinner_movie') and self.spinner_movie:
+            self.spinner_movie.stop()
         # Limit response length (e.g., 600 chars)
         max_len = 600
         short_response = response[:max_len]
@@ -313,6 +404,11 @@ class AlphaBurnApp(QMainWindow):
         self.statusBar().showMessage("Gemini response received.", 5000)
 
     def on_gemini_error_occurred(self, error_message):
+        # Hide thinking/loading indicator
+        self.thinking_label.setVisible(False)
+        self.spinner_label.setVisible(False)
+        if hasattr(self, 'spinner_movie') and self.spinner_movie:
+            self.spinner_movie.stop()
         self.chat_history.append(f"<b style='color:red;'>Gemini Error:</b> {error_message}")
         self.chat_input.setEnabled(True)
         self.send_chat_button.setEnabled(True)
