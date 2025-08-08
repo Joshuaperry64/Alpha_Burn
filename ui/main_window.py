@@ -2,21 +2,26 @@ import sys
 import os
 import subprocess
 import time
+import platform
+import ctypes
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLineEdit, QPushButton, QFrame, QSplitter, QTableView, QListWidget, QListWidgetItem,
     QComboBox, QProgressBar, QLabel, QStatusBar, QMessageBox,
-    QInputDialog, QMenu, QStyledItemDelegate
+    QInputDialog, QMenu, QStyledItemDelegate, QTableWidgetItem
 )
-from PyQt6.QtGui import QStandardItemModel, QStandardItem, QAction, QKeyEvent, QPainter, QColor
-from PyQt6.QtCore import Qt, QTimer, QModelIndex
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QAction, QKeyEvent, QPainter, QColor, QIcon
+from PyQt6.QtCore import Qt, QTimer, QModelIndex, QUrl
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
+
+import google.generativeai as genai
 
 # Import dialogs and workers from their respective modules
 from .dialogs import SettingsDialog, AdvancedBurnSettingsDialog, EditSongDialog
 from workers.download_worker import DownloadWorker
 from workers.tagger_worker import TaggerWorker
 from workers.burn_worker import BurnWorker
-from workers.gemini_worker import GeminiWorker
+from workers.gemini_sender import GeminiSender
 from workers.spotify_worker import SpotifyWorker
 from workers.library_worker import LibraryWorker
 import database
@@ -55,53 +60,102 @@ class AlphaBurnApp(QMainWindow):
         if not drive or "No drives" in drive:
             self.statusBar().showMessage("No drive selected.")
             return
-        # TODO: Implement platform-specific ejection
-        self.statusBar().showMessage(f"Ejecting drive {drive} (not yet implemented)")
+        try:
+            if platform.system() == "Windows":
+                drive_letter = drive.split(':')[0]
+                ctypes.windll.WINMM.mciSendStringW(f"set cdaudio!{drive_letter} door open", None, 0, None)
+                self.statusBar().showMessage(f"Eject command sent to drive {drive}")
+            elif platform.system() == "Linux":
+                subprocess.run(["eject", f"/dev/{drive}"], check=True)
+                self.statusBar().showMessage(f"Ejected drive {drive}")
+            else:
+                self.statusBar().showMessage("Ejection not supported on this OS.")
+        except Exception as e:
+            self.statusBar().showMessage(f"Failed to eject drive {drive}: {e}")
 
     def wipe_selected_drive(self):
         drive = self.drive_selector.currentText()
         if not drive or "No drives" in drive:
             self.statusBar().showMessage("No drive selected.")
             return
-        # TODO: Implement CD-RW wipe/erase
-        self.statusBar().showMessage(f"Wiping drive {drive} (not yet implemented)")
+        reply = QMessageBox.question(self, "Confirm Wipe", f"Are you sure you want to wipe the disc in drive {drive}? This is irreversible.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.No:
+            return
+        try:
+            self.statusBar().showMessage(f"Wiping drive {drive}... please wait.")
+            if platform.system() == "Windows":
+                # Using a PowerShell command to format the disc
+                command = ["powershell", "-Command", f"Get-CimInstance -ClassName Win32_CDROMDrive | Where-Object {{ $_.Drive -eq '{drive}' }} | Invoke-CimMethod -MethodName 'Format'"]
+                subprocess.run(command, check=True, capture_output=True, text=True)
+            elif platform.system() == "Linux":
+                command = ["wodim", "-v", f"dev=/dev/{drive}", "blank=fast"]
+                subprocess.run(command, check=True, capture_output=True, text=True)
+            else:
+                raise NotImplementedError("Wipe not supported on this OS.")
+            self.statusBar().showMessage(f"Successfully wiped drive {drive}")
+        except subprocess.CalledProcessError as e:
+            self.statusBar().showMessage(f"Failed to wipe drive {drive}: {e.stderr}")
+        except Exception as e:
+            self.statusBar().showMessage(f"An error occurred during wipe: {e}")
 
     def read_selected_cd(self):
         drive = self.drive_selector.currentText()
         if not drive or "No drives" in drive:
             self.statusBar().showMessage("No drive selected.")
             return
-        # Simulate reading CD state (replace with real implementation)
-        import random
-        self.cd_state = {
-            'drive': drive,
-            'space_mb': random.randint(0, 700),
-            'finalized': random.choice([True, False]),
-            'rewritable': random.choice([True, False]),
-            'files': [f"Track{i+1}.mp3" for i in range(random.randint(0, 10))],
-            'needs_wipe': random.choice([True, False])
-        }
-        msg = f"CD in {drive}: {self.cd_state['space_mb']}MB free, Finalized: {self.cd_state['finalized']}, Rewritable: {self.cd_state['rewritable']}, Files: {self.cd_state['files']}, Needs wipe: {self.cd_state['needs_wipe']}"
-        self.statusBar().showMessage(msg)
-        # Update CD content table
-        files = self.cd_state['files']
-        self.cd_content_table.setRowCount(len(files))
-        for i, fname in enumerate(files):
-            from PyQt6.QtWidgets import QTableWidgetItem
-            self.cd_content_table.setItem(i, 0, QTableWidgetItem(fname))
+        self.statusBar().showMessage(f"Reading disc in {drive}...")
+        try:
+            if platform.system() == "Windows":
+                fs = ctypes.windll.kernel32.GetDiskFreeSpaceExW
+                free_bytes = ctypes.c_ulonglong(0)
+                total_bytes = ctypes.c_ulonglong(0)
+                fs(f"{drive}\\", ctypes.byref(free_bytes), ctypes.byref(total_bytes), None)
+                self.cd_state['space_mb'] = total_bytes.value / (1024 * 1024)
+                # A simple check for finalization might involve trying to write a small file
+                # For now, we'll assume it's not finalized if it has space
+                self.cd_state['finalized'] = self.cd_state['space_mb'] < 1
+            elif platform.system() == "Linux":
+                # Use a command-line tool to get disc info
+                result = subprocess.run(["isoinfo", "-d", "-i", f"/dev/{drive}"], capture_output=True, text=True)
+                output = result.stdout
+                # Parse output for space and finalization status
+                # This is a simplified example
+                if "Volume size is: " in output:
+                    size_str = output.split("Volume size is: ")[1].split()[0]
+                    self.cd_state['space_mb'] = int(size_str) * 2 / 1024 # Assuming 2k blocks
+                self.cd_state['finalized'] = "Status: complete" in output
+
+            # For both platforms, list files
+            files = os.listdir(f"{drive}\\")
+            self.cd_state['files'] = files
+            self.cd_content_table.setRowCount(len(files))
+            for i, fname in enumerate(files):
+                self.cd_content_table.setItem(i, 0, QTableWidgetItem(fname))
+            self.statusBar().showMessage(f"Read disc in {drive} successfully.")
+        except Exception as e:
+            self.statusBar().showMessage(f"Failed to read disc: {e}")
 
     # --- Audio Player Controls ---
     def play_selected_audio(self):
-        # TODO: Implement audio playback for selected track
-        self.statusBar().showMessage("Play audio (not yet implemented)")
+        selected_indexes = self.library_table.selectionModel().selectedRows()
+        if not selected_indexes:
+            self.statusBar().showMessage("No track selected.")
+            return
+        filepath = self.library_model.item(selected_indexes[0].row(), 6).text()
+        if not os.path.exists(filepath):
+            self.statusBar().showMessage("File not found.")
+            return
+        self.media_player.setSource(QUrl.fromLocalFile(filepath))
+        self.media_player.play()
+        self.statusBar().showMessage(f"Playing: {os.path.basename(filepath)}")
 
     def pause_audio(self):
-        # TODO: Implement pause
-        self.statusBar().showMessage("Pause audio (not yet implemented)")
+        self.media_player.pause()
+        self.statusBar().showMessage("Playback paused.")
 
     def stop_audio(self):
-        # TODO: Implement stop
-        self.statusBar().showMessage("Stop audio (not yet implemented)")
+        self.media_player.stop()
+        self.statusBar().showMessage("Playback stopped.")
     def showEvent(self, event):
         super().showEvent(event)
         self.showMaximized()
@@ -139,6 +193,14 @@ class AlphaBurnApp(QMainWindow):
         self.statusBar().showMessage("Ready.")
         self.credit_label = QLabel("Developed by, Alpha & Joshua Perry")
         self.statusBar().addPermanentWidget(self.credit_label)
+
+        # Initialize Media Player
+        self.media_player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.media_player.setAudioOutput(self.audio_output)
+
+        self.gemini_chat_session = None
+        self.restart_gemini_session()
 
     def _create_actions(self):
         self.open_roadmap_action = QAction("&Open Roadmap", self, triggered=self.open_roadmap)
@@ -345,66 +407,83 @@ class AlphaBurnApp(QMainWindow):
         self.download_button.setEnabled(True); self.burn_button.setEnabled(True); self.chat_input.setEnabled(True)
         if self.is_batch_downloading: self.is_batch_downloading = False; self.download_queue.clear(); QMessageBox.warning(self, "Batch Download Halted", "An error occurred, halting the playlist download.")
 
+    self.gemini_chat_session = None
+        self.restart_gemini_session()
+
+    def restart_gemini_session(self):
+        """Initializes or restarts the Gemini chat session."""
+        self.statusBar().showMessage("Initializing Gemini session...")
+        api_key = config.get_setting("API_KEYS", "gemini_api_key")
+        model_name = config.get_setting("API_KEYS", "gemini_model", "gemini-1.5-pro")
+        instructions_path = config.get_setting("API_KEYS", "system_instructions_file")
+
+        if not api_key:
+            self.chat_history.append("<b style='color:orange;'>AI Assistant is offline. Please set your Gemini API key in File > Settings.</b>")
+            self.gemini_chat_session = None
+            return
+
+        try:
+            genai.configure(api_key=api_key)
+            model = genai.GenerativeModel(model_name)
+            
+            system_instructions = []
+            if instructions_path and os.path.exists(instructions_path):
+                with open(instructions_path, 'r', encoding='utf-8') as f:
+                    system_instructions.append(f.read())
+            else:
+                system_instructions.append("You are a helpful assistant.")
+
+            self.gemini_chat_session = model.start_chat(history=[])
+            # Send the system instructions as the first message
+            self.gemini_chat_session.send_message(system_instructions)
+
+            self.statusBar().showMessage("Gemini session started.", 3000)
+            self.chat_history.append("<b style='color:green;'>AI Assistant is online.</b>")
+
+        except Exception as e:
+            self.on_gemini_error_occurred(f"Failed to initialize Gemini: {e}")
+            self.gemini_chat_session = None
+
     def send_chat_message(self):
         prompt = self.chat_input.text()
         if not prompt:
             return
 
-        # User message in blue
+        if self.gemini_chat_session is None:
+            QMessageBox.warning(self, "Gemini Offline", "The AI assistant is not configured. Please set your API key in the settings.")
+            return
+
         self.chat_history.append(f"<span style='color:#2196F3;'><b>You:</b> {prompt}</span>")
         self.chat_input.clear()
         self.chat_input.setEnabled(False)
         self.send_chat_button.setEnabled(False)
-        self.statusBar().showMessage(f"Asking Gemini: '{prompt}'...")
+        self.statusBar().showMessage(f"Asking Gemini: '{prompt[:30]}...' ")
 
-        # Show thinking/loading indicator
         self.thinking_label.setVisible(True)
         self.spinner_label.setVisible(True)
         if hasattr(self, 'spinner_movie') and self.spinner_movie:
             self.spinner_movie.start()
 
-        api_key = config.get_setting("API_KEYS", "gemini_api_key")
-        model_name = config.get_setting("API_KEYS", "gemini_model", "gemini-1.5-pro")
-        system_instructions = config.get_setting("API_KEYS", "system_instructions", "You are the AI assistant inside this CD burner application. You can search for music, download playlists, and assist with burning discs. Respond as a helpful in-app assistant.")
-        if not api_key:
-            QMessageBox.critical(self, "API Key Missing", "Please set your Gemini API key in File > Settings.")
-            self.chat_input.setEnabled(True)
-            self.send_chat_button.setEnabled(True)
-            self.statusBar().showMessage("Ready.")
-            self.thinking_label.setVisible(False)
-            self.spinner_label.setVisible(False)
-            if hasattr(self, 'spinner_movie') and self.spinner_movie:
-                self.spinner_movie.stop()
-            return
-
-        # Prepend CD state to the prompt for AI context
         cd_state_str = f"[CD STATE] Drive: {self.cd_state.get('drive')}, Space: {self.cd_state.get('space_mb')}MB, Finalized: {self.cd_state.get('finalized')}, Rewritable: {self.cd_state.get('rewritable')}, Files: {self.cd_state.get('files')}, Needs wipe: {self.cd_state.get('needs_wipe')}\n"
         full_prompt = cd_state_str + prompt
 
-        self.gemini_worker = GeminiWorker(api_key, model_name, system_instructions)
-        self.gemini_worker.response_received.connect(self.on_gemini_response_received)
-        self.gemini_worker.error_occurred.connect(self.on_gemini_error_occurred)
-        self.gemini_worker.send_message(full_prompt)
+        self.gemini_sender = GeminiSender(self.gemini_chat_session, full_prompt)
+        self.gemini_sender.response_received.connect(self.on_gemini_response_received)
+        self.gemini_sender.error_occurred.connect(self.on_gemini_error_occurred)
+        self.gemini_sender.start()
 
     def on_gemini_response_received(self, response):
-        # Hide thinking/loading indicator
         self.thinking_label.setVisible(False)
         self.spinner_label.setVisible(False)
         if hasattr(self, 'spinner_movie') and self.spinner_movie:
             self.spinner_movie.stop()
-        # Limit response length (e.g., 600 chars)
-        max_len = 600
-        short_response = response[:max_len]
-        if len(response) > max_len:
-            short_response += "... <i>(response truncated)</i>"
-        # AI message in green
-        self.chat_history.append(f"<span style='color:#43A047;'><b>Gemini:</b> {short_response}</span>")
+        
+        self.chat_history.append(f"<span style='color:#43A047;'><b>Gemini:</b> {response}</span>")
         self.chat_input.setEnabled(True)
         self.send_chat_button.setEnabled(True)
         self.statusBar().showMessage("Gemini response received.", 5000)
 
     def on_gemini_error_occurred(self, error_message):
-        # Hide thinking/loading indicator
         self.thinking_label.setVisible(False)
         self.spinner_label.setVisible(False)
         if hasattr(self, 'spinner_movie') and self.spinner_movie:

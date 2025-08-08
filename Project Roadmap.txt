@@ -1,54 +1,42 @@
 Alpha_Burn: Project Roadmap & Development Plan
-Project Status: Version 1.0 - Complete
+Project Status: Version 1.1 - In Progress
 Lead Architect: Alpha
 Operator: Joshua Perry
 
 Phase 1: Core Foundation (Implemented)
 [✓] Project Initialization: Renamed from "Sonic Forge" to "Alpha_Burn".
-
 [✓] Ingestion Engine: Core download functionality using yt-dlp.
-
 [✓] Metamorph AI Tagger: Automated metadata and album art embedding.
-
 [✓] Library Core: Foundational music library display.
-
 [✓] Cinder Burn Engine (UI): User interface for all burning operations is in place.
-
 [✓] Robust Error Handling: Worker-thread-based architecture prevents crashes.
-
 [✓] Persistent Settings: Application settings are saved and loaded.
 
 Phase 2: Feature Expansion (Implemented)
 [✓] Advanced Burn Control: A dedicated dialog for advanced burning parameters.
-
 [✓] Burn Queue Presets: Ability to save, load, and delete custom burn queue "loadouts".
-
 [✓] Enhanced UI & UX: Comprehensive tooltips, persistent developer credit, and integrated roadmap access.
-
 [✓] File Management Utilities: Automated install.bat and generate_filetree.bat.
 
 Phase 3: AI & Automation (Implemented)
 [✓] Full Gemini AI Curator Integration: The AI prompt is fully functional for intelligent playlisting.
-
 [✓] Advanced Library Management:
-
-[✓] Persistent Library Database (SQLite) implemented.
-
-[✓] Song rating system (1-5 stars) implemented.
-
-[✓] Manual metadata editor implemented.
-
+    [✓] Persistent Library Database (SQLite) implemented.
+    [✓] Song rating system (1-5 stars) implemented.
+    [✓] Manual metadata editor implemented.
 [✓] Cinder Burn Engine (Logic):
-
-[✓] Integration with pycdlib to create ISO files is complete.
-
-[✓] Execution of the command-line burn process is implemented.
-
+    [✓] Integration with pycdlib to create ISO files is complete.
+    [✓] Execution of the command-line burn process is implemented.
 [✓] Spotify Integration: Full functionality to parse a Spotify playlist URL and batch-download tracks.
+
+Phase 4: Drive Operations & Playback (In Progress)
+[✓] Advanced Burn Settings: Dialog is now fully functional and saves settings.
+[✓] CD/DVD Drive Ejection: Implemented for Windows and Linux.
+[✓] CD-RW Wiping: Implemented for Windows and Linux.
+[✓] CD Reading: Basic implementation for reading disc contents.
+[✓] Audio Playback: Implemented basic audio playback controls (Play, Pause, Stop).
 
 Optimizations (Implemented)
 [✓] Database: Transitioned from an in-memory model to a persistent SQLite database.
-
 [✓] Artwork Caching: The application now caches downloaded album art to reduce network requests.
-
 [✓] Configuration File: Settings have been externalized to a user-editable config.ini file.

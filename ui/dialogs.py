@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLineEdit, QPushButton, QComboBox, 
-    QCheckBox, QLabel, QDialogButtonBox
+    QCheckBox, QLabel, QDialogButtonBox, QFileDialog
 )
 import config
 import database
@@ -46,7 +46,6 @@ class EditSongDialog(QDialog):
 
 
 class AdvancedBurnSettingsDialog(QDialog):
-    # This dialog doesn't use persistent settings yet, so it remains unchanged for now.
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Advanced Burn Settings")
@@ -73,12 +72,37 @@ class AdvancedBurnSettingsDialog(QDialog):
         self.test_mode_checkbox = QCheckBox("Enable Test Mode")
         self.test_mode_checkbox.setToolTip("Simulate the burn process without actually writing data to the disc. Useful for testing.")
         layout.addWidget(self.test_mode_checkbox)
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Apply | QDialogButtonBox.StandardButton.Cancel)
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Apply | QDialogButtonBox.StandardButton.Cancel)
         button_box.button(QDialogButtonBox.StandardButton.Apply).setToolTip("Apply these advanced settings without closing the dialog.")
+        button_box.button(QDialogButtonBox.StandardButton.Ok).setToolTip("Apply changes and close the dialog.")
         button_box.button(QDialogButtonBox.StandardButton.Cancel).setToolTip("Cancel and close this dialog without saving changes.")
+        button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.apply_settings)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
+        self._load_settings()
+
+    def _load_settings(self):
+        """Loads burn settings from the config file."""
+        speed = config.get_setting('BURN_SETTINGS', 'speed', 'Max')
+        burn_proof = config.get_setting('BURN_SETTINGS', 'burn_proof', 'true').lower() == 'true'
+        test_mode = config.get_setting('BURN_SETTINGS', 'test_mode', 'false').lower() == 'true'
+        self.burn_speed_selector.setCurrentText(speed)
+        self.burn_proof_checkbox.setChecked(burn_proof)
+        self.test_mode_checkbox.setChecked(test_mode)
+
+    def apply_settings(self):
+        """Saves the current settings to the config file."""
+        config.update_setting('BURN_SETTINGS', 'speed', self.burn_speed_selector.currentText())
+        config.update_setting('BURN_SETTINGS', 'burn_proof', str(self.burn_proof_checkbox.isChecked()).lower())
+        config.update_setting('BURN_SETTINGS', 'test_mode', str(self.test_mode_checkbox.isChecked()).lower())
+        if self.parent():
+            self.parent().statusBar().showMessage("Advanced burn settings applied.", 3000)
+
+    def accept(self):
+        """Saves settings and closes the dialog."""
+        self.apply_settings()
+        super().accept()
 
 class SettingsDialog(QDialog):
     """Settings dialog now reads from and writes to config.ini."""
@@ -158,17 +182,18 @@ class SettingsDialog(QDialog):
         spotify_secret_layout.addWidget(self.spotify_secret_input)
         layout.addLayout(spotify_secret_layout)
 
-
-        # System Instructions for AI
-        sysinst_layout = QVBoxLayout()
-        sysinst_label = QLabel("AI System Instructions:")
-        sysinst_label.setToolTip("Custom system instructions for the AI assistant.")
+        # System Instructions File
+        sysinst_layout = QHBoxLayout()
+        sysinst_label = QLabel("AI System Instructions File:")
+        sysinst_label.setToolTip("A .txt file containing system instructions for the AI assistant.")
         sysinst_layout.addWidget(sysinst_label)
-        self.system_instructions_input = QLineEdit()
-        self.system_instructions_input.setPlaceholderText("e.g. You are the AI inside a CD burner app...")
-        self.system_instructions_input.setToolTip("Custom system instructions for the AI assistant.")
-        self.system_instructions_input.setText(config.get_setting("API_KEYS", "system_instructions", "You are the AI assistant inside a CD burner application. You can search for music, download playlists, and assist with burning discs."))
-        sysinst_layout.addWidget(self.system_instructions_input)
+        self.system_instructions_path_input = QLineEdit()
+        self.system_instructions_path_input.setReadOnly(True)
+        self.system_instructions_path_input.setText(config.get_setting("API_KEYS", "system_instructions_file"))
+        sysinst_layout.addWidget(self.system_instructions_path_input)
+        self.browse_button = QPushButton("Browse...")
+        self.browse_button.clicked.connect(self.browse_for_instructions_file)
+        sysinst_layout.addWidget(self.browse_button)
         layout.addLayout(sysinst_layout)
 
         button_box = QDialogButtonBox(
@@ -187,7 +212,10 @@ class SettingsDialog(QDialog):
     def on_gemini_model_changed(self, text):
         self.custom_gemini_model_input.setVisible(text == "custom")
 
-
+    def browse_for_instructions_file(self):
+        filename, _ = QFileDialog.getOpenFileName(self, "Select System Instructions File", "", "Text Files (*.txt)")
+        if filename:
+            self.system_instructions_path_input.setText(filename)
 
     def apply_settings(self):
         """Saves all settings to the config.ini file, but does not close the dialog."""
@@ -198,7 +226,9 @@ class SettingsDialog(QDialog):
             config.update_setting("API_KEYS", "gemini_model", self.gemini_model_selector.currentText())
         config.update_setting("API_KEYS", "spotify_client_id", self.spotify_id_input.text())
         config.update_setting("API_KEYS", "spotify_client_secret", self.spotify_secret_input.text())
-        config.update_setting("API_KEYS", "system_instructions", self.system_instructions_input.text())
+        config.update_setting("API_KEYS", "system_instructions_file", self.system_instructions_path_input.text())
+        if self.parent():
+            self.parent().restart_gemini_session()
 
     def ok_and_close(self):
         self.apply_settings()
