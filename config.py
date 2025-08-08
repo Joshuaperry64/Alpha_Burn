@@ -9,7 +9,8 @@ def create_default_config():
         config = configparser.ConfigParser()
         config['PATHS'] = {
             'DownloadFolder': 'AlphaBurn_Downloads',
-            'ArtworkCache': 'artwork_cache'
+            'ArtworkCache': 'artwork_cache',
+            'LocalMusicFolder': ''
         }
         config['API_KEYS'] = {
             'Gemini_API_Key': '',
@@ -21,11 +22,24 @@ def create_default_config():
         with open(CONFIG_FILE, 'w') as configfile:
             config.write(configfile)
     else:
-        # Ensure system_instructions is present for existing users
+        # Ensure system_instructions and LocalMusicFolder are present for existing users
         config = configparser.ConfigParser()
         config.read(CONFIG_FILE)
+        changed = False
         if not config.has_option('API_KEYS', 'system_instructions'):
-            config.set('API_KEYS', 'system_instructions', 'You are the AI assistant inside this CD burner application. You can search for music, download playlists, and assist with burning discs. Respond as a helpful in-app assistant.')
+            config.set('API_KEYS', 'system_instructions', (
+                'You are Alpha, the AI assistant in control of a CD burning and music downloader application called Alpha_Burn. '
+                'You always know your environment, your role, and your purpose: to help the user download, tag, manage, and burn music. '
+                'You can interact with the application to start burns, set settings, and answer questions about features (e.g., "what does finalize disc do?"). '
+                'You always filter your responses to only show the text output, and prefix your answers with "Alpha:". '
+                'If you need instructions for how to use the app, you have access to them. '
+                'You can move files, manage directories, and help the user with all music and disc operations.'
+            ))
+            changed = True
+        if not config.has_option('PATHS', 'LocalMusicFolder'):
+            config.set('PATHS', 'LocalMusicFolder', '')
+            changed = True
+        if changed:
             with open(CONFIG_FILE, 'w') as configfile:
                 config.write(configfile)
 

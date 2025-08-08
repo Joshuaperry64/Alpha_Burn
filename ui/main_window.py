@@ -199,8 +199,6 @@ class AlphaBurnApp(QMainWindow):
         self.audio_output = QAudioOutput()
         self.media_player.setAudioOutput(self.audio_output)
 
-        self.gemini_chat_session = None
-        self.restart_gemini_session()
 
     def _create_actions(self):
         self.open_roadmap_action = QAction("&Open Roadmap", self, triggered=self.open_roadmap)
@@ -398,17 +396,30 @@ class AlphaBurnApp(QMainWindow):
         self.tagger = TaggerWorker(filepath, info.get('title','')); self.tagger.finished.connect(self.on_tagging_finished); self.tagger.error.connect(self.on_worker_error); self.tagger.status_update.connect(lambda msg: self.statusBar().showMessage(msg)); self.tagger.start()
 
     def on_tagging_finished(self, file_path, metadata):
-        database.add_song(file_path, metadata); self.load_library_from_db(); self.url_input.clear()
+        import shutil
+        # Move to Local Music Folder if set
+        local_music_folder = config.get_setting('PATHS', 'LocalMusicFolder')
+        dest_path = file_path
+        if local_music_folder and os.path.isdir(local_music_folder):
+            try:
+                dest_path = os.path.join(local_music_folder, os.path.basename(file_path))
+                if os.path.abspath(file_path) != os.path.abspath(dest_path):
+                    shutil.move(file_path, dest_path)
+                    file_path = dest_path
+            except Exception as e:
+                self.statusBar().showMessage(f"Failed to move file: {e}", 5000)
+        database.add_song(file_path, metadata)
+        self.load_library_from_db()
+        self.url_input.clear()
         self.download_button.setEnabled(True)
-        if self.is_batch_downloading: QTimer.singleShot(500, self.process_download_queue)
+        if self.is_batch_downloading:
+            QTimer.singleShot(500, self.process_download_queue)
 
     def on_worker_error(self, error_message):
         QMessageBox.critical(self, "Error", f"{error_message}"); self.statusBar().showMessage("Error occurred.", 5000)
         self.download_button.setEnabled(True); self.burn_button.setEnabled(True); self.chat_input.setEnabled(True)
         if self.is_batch_downloading: self.is_batch_downloading = False; self.download_queue.clear(); QMessageBox.warning(self, "Batch Download Halted", "An error occurred, halting the playlist download.")
 
-    self.gemini_chat_session = None
-        self.restart_gemini_session()
 
     def restart_gemini_session(self):
         """Initializes or restarts the Gemini chat session."""
@@ -431,7 +442,15 @@ class AlphaBurnApp(QMainWindow):
                 with open(instructions_path, 'r', encoding='utf-8') as f:
                     system_instructions.append(f.read())
             else:
-                system_instructions.append("You are a helpful assistant.")
+                # Fallback: always provide full context for Alpha's role and environment
+                system_instructions.append(
+                    'You are Alpha, the AI assistant in control of a CD burning and music downloader application called Alpha_Burn. '
+                    'You always know your environment, your role, and your purpose: to help the user download, tag, manage, and burn music. '
+                    'You can interact with the application to start burns, set settings, and answer questions about features (e.g., "what does finalize disc do?"). '
+                    'You always filter your responses to only show the text output, and prefix your answers with "Alpha:". '
+                    'If you need instructions for how to use the app, you have access to them. '
+                    'You can move files, manage directories, and help the user with all music and disc operations.'
+                )
 
             self.gemini_chat_session = model.start_chat(history=[])
             # Send the system instructions as the first message
@@ -477,11 +496,11 @@ class AlphaBurnApp(QMainWindow):
         self.spinner_label.setVisible(False)
         if hasattr(self, 'spinner_movie') and self.spinner_movie:
             self.spinner_movie.stop()
-        
-        self.chat_history.append(f"<span style='color:#43A047;'><b>Gemini:</b> {response}</span>")
+        # Only show the AI's text output, with prefix 'Alpha:'
+        self.chat_history.append(f"<span style='color:#43A047;'><b>Alpha:</b> {response}</span>")
         self.chat_input.setEnabled(True)
         self.send_chat_button.setEnabled(True)
-        self.statusBar().showMessage("Gemini response received.", 5000)
+        self.statusBar().showMessage("Alpha response received.", 5000)
 
     def on_gemini_error_occurred(self, error_message):
         self.thinking_label.setVisible(False)

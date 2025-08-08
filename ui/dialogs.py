@@ -117,7 +117,7 @@ class SettingsDialog(QDialog):
                 with open(qss_path, 'r', encoding='utf-8') as f:
                     self.setStyleSheet(f.read())
         layout = QVBoxLayout(self)
-        
+
         # Gemini API Key
         gemini_layout = QHBoxLayout()
         gemini_api_label = QLabel("Gemini AI API Key:")
@@ -182,6 +182,20 @@ class SettingsDialog(QDialog):
         spotify_secret_layout.addWidget(self.spotify_secret_input)
         layout.addLayout(spotify_secret_layout)
 
+        # Local Music Folder
+        localmusic_layout = QHBoxLayout()
+        localmusic_label = QLabel("Local Music Folder:")
+        localmusic_label.setToolTip("Select your existing music library folder. Tagged/converted files can be auto-moved here.")
+        localmusic_layout.addWidget(localmusic_label)
+        self.localmusic_input = QLineEdit()
+        self.localmusic_input.setReadOnly(True)
+        self.localmusic_input.setText(config.get_setting("PATHS", "LocalMusicFolder"))
+        localmusic_layout.addWidget(self.localmusic_input)
+        self.localmusic_browse_button = QPushButton("Browse...")
+        self.localmusic_browse_button.clicked.connect(self.browse_for_localmusic_folder)
+        localmusic_layout.addWidget(self.localmusic_browse_button)
+        layout.addLayout(localmusic_layout)
+
         # System Instructions File
         sysinst_layout = QHBoxLayout()
         sysinst_label = QLabel("AI System Instructions File:")
@@ -203,7 +217,11 @@ class SettingsDialog(QDialog):
         )
         button_box.button(QDialogButtonBox.StandardButton.Apply).setToolTip("Apply changes without closing the dialog.")
         button_box.button(QDialogButtonBox.StandardButton.Ok).setToolTip("Apply changes and close the dialog.")
-        button_box.button(QDialogButtonBox.StandardButton.Cancel).setToolTip("Cancel and close the dialog without saving changes.")
+        button_box.button(QDialogButtonBox.StandardButton.Cancel).setToolTip("Cancel and close this dialog without saving changes.")
+        button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.apply_settings)
+        button_box.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.ok_and_close)
+        button_box.rejected.connect(self.reject)
+        layout.addWidget(button_box)
         button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.apply_settings)
         button_box.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.ok_and_close)
         button_box.rejected.connect(self.reject)
@@ -227,6 +245,7 @@ class SettingsDialog(QDialog):
         config.update_setting("API_KEYS", "spotify_client_id", self.spotify_id_input.text())
         config.update_setting("API_KEYS", "spotify_client_secret", self.spotify_secret_input.text())
         config.update_setting("API_KEYS", "system_instructions_file", self.system_instructions_path_input.text())
+        config.update_setting("PATHS", "LocalMusicFolder", self.localmusic_input.text())
         if self.parent():
             self.parent().restart_gemini_session()
 
