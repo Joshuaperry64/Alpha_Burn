@@ -64,6 +64,15 @@ class UiSetup:
         drive_layout.addWidget(QLabel("Drive:"))
         self.main_window.drive_selector = QComboBox()
         drive_layout.addWidget(self.main_window.drive_selector)
+        # Add Refresh button for drives
+        from PyQt6.QtWidgets import QPushButton
+        self.main_window.refresh_drive_button = QPushButton("Refresh")
+        self.main_window.refresh_drive_button.setToolTip("Refresh available drives")
+        drive_layout.addWidget(self.main_window.refresh_drive_button)
+        # Add Browse button for music directory
+        self.main_window.browse_music_button = QPushButton("Browse...")
+        self.main_window.browse_music_button.setToolTip("Select your music directory")
+        drive_layout.addWidget(self.main_window.browse_music_button)
         drive_layout.addWidget(QLabel("Preset:"))
         self.main_window.preset_selector = QComboBox()
         drive_layout.addWidget(self.main_window.preset_selector)
@@ -116,3 +125,5 @@ class UiSetup:
         self.main_window.burn_button.clicked.connect(self.main_window.start_burn_process)
         self.main_window.send_chat_button.clicked.connect(self.main_window.send_chat_message)
         self.main_window.chat_input.returnPressed.connect(self.main_window.send_chat_message)
+        self.main_window.browse_music_button.clicked.connect(self.main_window.browse_music_directory)
+        self.main_window.refresh_drive_button.clicked.connect(self.main_window._populate_drives)

@@ -139,8 +139,36 @@ class AlphaBurnApp(QMainWindow):
         self.rescan_library_action.setEnabled(True)
 
     def _populate_drives(self):
-        # This function can be implemented to find available optical drives
-        pass
+        # Windows: Use Win32_LogicalDisk to find optical drives (DriveType 5)
+        import platform
+        self.drive_selector.clear()
+        drives = []
+        if platform.system() == "Windows":
+            try:
+                import subprocess
+                result = subprocess.run([
+                    "powershell", "-Command",
+                    "Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 5 } | Select-Object -ExpandProperty DeviceID"
+                ], capture_output=True, text=True)
+                for line in result.stdout.splitlines():
+                    line = line.strip()
+                    if line:
+                        drives.append(line)
+            except Exception as e:
+                drives = []
+        if not drives:
+            self.drive_selector.addItem("No drives found")
+        else:
+            self.drive_selector.addItems(drives)
+
+    def browse_music_directory(self):
+        from PyQt6.QtWidgets import QFileDialog
+        dir_path = QFileDialog.getExistingDirectory(self, "Select Music Directory", self.download_path)
+        if dir_path:
+            import config
+            config.update_setting('PATHS', 'DownloadFolder', dir_path)
+            self.download_path = dir_path
+            self.load_library_from_db()
 
     def show_library_context_menu(self, position):
         indexes = self.library_table.selectionModel().selectedRows()
