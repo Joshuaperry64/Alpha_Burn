@@ -16,7 +16,7 @@ from .dialogs import SettingsDialog, AdvancedBurnSettingsDialog, EditSongDialog
 from workers.download_worker import DownloadWorker
 from workers.tagger_worker import TaggerWorker
 from workers.burn_worker import BurnWorker
-from workers.ai_worker import AIWorker
+from workers.gemini_worker import GeminiWorker
 from workers.spotify_worker import SpotifyWorker
 from workers.library_worker import LibraryWorker
 import database
@@ -40,10 +40,13 @@ class StarRatingDelegate(QStyledItemDelegate):
         super().paint(painter, option, index)
 
 class AlphaBurnApp(QMainWindow):
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.showMaximized()
     def __init__(self):
         super().__init__()
         self.setWindowTitle(f"{constants.APP_NAME} v{constants.APP_VERSION}")
-        self.setGeometry(100, 100, constants.WINDOW_WIDTH, constants.WINDOW_HEIGHT)
+        self.showMaximized()
 
         self.download_path = config.get_setting('PATHS', 'DownloadFolder')
         if not os.path.exists(self.download_path):
@@ -52,6 +55,9 @@ class AlphaBurnApp(QMainWindow):
         database.init_db()
         self.download_queue = []
         self.is_batch_downloading = False
+
+        self.chat_history = None  # Will be set by UiSetup
+        self.chat_input = None    # Will be set by UiSetup
 
         self.ui_setup = UiSetup(self)
         self.ui_setup.setup_ui()
@@ -183,39 +189,7 @@ class AlphaBurnApp(QMainWindow):
         total_mb = total_size / (1024*1024); cap_mb = 700.0; pct = (total_mb / cap_mb) * 100 if cap_mb > 0 else 0
         self.capacity_progress.setStyleSheet("QProgressBar::chunk { background-color: red; }" if pct > 100 else ""); self.capacity_progress.setValue(int(pct)); self.capacity_label.setText(f"{total_mb:.1f} MB / {cap_mb:.1f} MB ({pct:.1f}%)")
 
-    def start_ai_curation(self):
-        prompt = self.ai_curator_input.text();
-        if not prompt: return
-        api_key = config.get_setting("API_KEYS", "gemini_api_key")
-        if not api_key: QMessageBox.critical(self, "API Key Missing", "Please set your Gemini API key in File > Settings."); return
-        self.statusBar().showMessage(f"Asking Gemini AI: '{prompt}'..."); self.ai_curator_input.setEnabled(False)
-        self.ai_worker = AIWorker(prompt, self.library_model, api_key); self.ai_worker.finished.connect(self.on_ai_curation_finished); self.ai_worker.error.connect(self.on_worker_error); self.ai_worker.start()
-
-    def on_ai_curation_finished(self, result):
-        result_type = result.get("type")
-        data = result.get("data")
-
-        if not data:
-            self.statusBar().showMessage("AI returned no results.", 5000)
-            self.ai_curator_input.clear()
-            self.ai_curator_input.setEnabled(True)
-            return
-
-        if result_type == "curation_list":
-            self.statusBar().showMessage(f"AI curated {len(data)} tracks from your library.", 5000)
-            self.burn_queue_list.clear()
-            for path in data:
-                self.add_filepath_to_burn_queue(path)
-        
-        elif result_type == "download_list":
-            playlist_name = result.get("playlist_name", "AI-Generated Playlist")
-            self.statusBar().showMessage(f"AI found '{playlist_name}' with {len(data)} tracks. Starting batch download.")
-            self.download_queue.extend(data)
-            self.is_batch_downloading = True
-            self.process_download_queue()
-
-        self.ai_curator_input.clear()
-        self.ai_curator_input.setEnabled(True)
+    
 
     def start_burn_process(self):
         if self.burn_queue_list.count() == 0: QMessageBox.warning(self, "Empty Queue", "Burn queue is empty."); return
@@ -268,8 +242,53 @@ class AlphaBurnApp(QMainWindow):
 
     def on_worker_error(self, error_message):
         QMessageBox.critical(self, "Error", f"{error_message}"); self.statusBar().showMessage("Error occurred.", 5000)
-        self.download_button.setEnabled(True); self.burn_button.setEnabled(True); self.ai_curator_input.setEnabled(True)
+        self.download_button.setEnabled(True); self.burn_button.setEnabled(True); self.chat_input.setEnabled(True)
         if self.is_batch_downloading: self.is_batch_downloading = False; self.download_queue.clear(); QMessageBox.warning(self, "Batch Download Halted", "An error occurred, halting the playlist download.")
+
+    def send_chat_message(self):
+        prompt = self.chat_input.text()
+        if not prompt:
+            return
+
+        # User message in blue
+        self.chat_history.append(f"<span style='color:#2196F3;'><b>You:</b> {prompt}</span>")
+        self.chat_input.clear()
+        self.chat_input.setEnabled(False)
+        self.send_chat_button.setEnabled(False)
+        self.statusBar().showMessage(f"Asking Gemini: '{prompt}'...")
+
+        api_key = config.get_setting("API_KEYS", "gemini_api_key")
+        model_name = config.get_setting("API_KEYS", "gemini_model", "gemini-1.5-pro")
+        system_instructions = config.get_setting("API_KEYS", "system_instructions", "You are the AI assistant inside this CD burner application. You can search for music, download playlists, and assist with burning discs. Respond as a helpful in-app assistant.")
+        if not api_key:
+            QMessageBox.critical(self, "API Key Missing", "Please set your Gemini API key in File > Settings.")
+            self.chat_input.setEnabled(True)
+            self.send_chat_button.setEnabled(True)
+            self.statusBar().showMessage("Ready.")
+            return
+
+        self.gemini_worker = GeminiWorker(api_key, model_name, system_instructions)
+        self.gemini_worker.response_received.connect(self.on_gemini_response_received)
+        self.gemini_worker.error_occurred.connect(self.on_gemini_error_occurred)
+        self.gemini_worker.send_message(prompt)
+
+    def on_gemini_response_received(self, response):
+        # Limit response length (e.g., 600 chars)
+        max_len = 600
+        short_response = response[:max_len]
+        if len(response) > max_len:
+            short_response += "... <i>(response truncated)</i>"
+        # AI message in green
+        self.chat_history.append(f"<span style='color:#43A047;'><b>Gemini:</b> {short_response}</span>")
+        self.chat_input.setEnabled(True)
+        self.send_chat_button.setEnabled(True)
+        self.statusBar().showMessage("Gemini response received.", 5000)
+
+    def on_gemini_error_occurred(self, error_message):
+        self.chat_history.append(f"<b style='color:red;'>Gemini Error:</b> {error_message}")
+        self.chat_input.setEnabled(True)
+        self.send_chat_button.setEnabled(True)
+        self.statusBar().showMessage("Gemini error occurred.", 5000)
 
     def save_preset(self):
         if self.burn_queue_list.count() == 0: return

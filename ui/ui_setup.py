@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton, QFrame, QSplitter, 
-    QTableView, QListWidget, QComboBox, QProgressBar, QLabel, QWidget
+    QTableView, QListWidget, QComboBox, QProgressBar, QLabel, QWidget, QTextEdit
 )
 from PyQt6.QtCore import Qt
 
@@ -28,8 +28,8 @@ class UiSetup:
         top_bar.addWidget(self.main_window.url_input)
         self.main_window.download_button = QPushButton("Download")
         top_bar.addWidget(self.main_window.download_button)
-        self.main_window.ai_curator_input = QLineEdit(placeholderText="Ask Gemini AI...")
-        top_bar.addWidget(self.main_window.ai_curator_input, 1)
+        self.main_window.send_chat_button = QPushButton("Send")
+        top_bar.addWidget(self.main_window.send_chat_button)
         self.main_window.main_layout.addLayout(top_bar)
 
     def create_central_splitter(self):
@@ -55,6 +55,7 @@ class UiSetup:
         
         self.create_capacity_meter(right_layout)
         self.create_burn_controls(right_layout)
+        self.create_chat_area(right_layout)
         
         self.main_window.splitter.addWidget(right_pane)
 
@@ -94,6 +95,15 @@ class UiSetup:
         burn_ctrl_layout.addWidget(self.main_window.burn_button)
         layout.addLayout(burn_ctrl_layout)
 
+    def create_chat_area(self, layout):
+        chat_layout = QVBoxLayout()
+        self.main_window.chat_history = QTextEdit()
+        self.main_window.chat_history.setReadOnly(True)
+        chat_layout.addWidget(self.main_window.chat_history)
+        self.main_window.chat_input = QLineEdit(placeholderText="Chat with Gemini...")
+        chat_layout.addWidget(self.main_window.chat_input)
+        layout.addLayout(chat_layout)
+
     def connect_signals(self):
         self.main_window.library_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.main_window.library_table.customContextMenuRequested.connect(self.main_window.show_library_context_menu)
@@ -104,4 +114,5 @@ class UiSetup:
         self.main_window.preset_selector.activated.connect(self.main_window.load_preset)
         self.main_window.advanced_burn_button.clicked.connect(self.main_window.open_advanced_burn_settings)
         self.main_window.burn_button.clicked.connect(self.main_window.start_burn_process)
-        self.main_window.ai_curator_input.returnPressed.connect(self.main_window.start_ai_curation)
+        self.main_window.send_chat_button.clicked.connect(self.main_window.send_chat_message)
+        self.main_window.chat_input.returnPressed.connect(self.main_window.send_chat_message)

@@ -58,7 +58,7 @@ class AdvancedBurnSettingsDialog(QDialog):
         layout.addWidget(self.burn_proof_checkbox)
         self.test_mode_checkbox = QCheckBox("Enable Test Mode")
         layout.addWidget(self.test_mode_checkbox)
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Apply | QDialogButtonBox.StandardButton.Cancel)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -80,6 +80,33 @@ class SettingsDialog(QDialog):
         gemini_layout.addWidget(self.gemini_api_key_input)
         layout.addLayout(gemini_layout)
 
+        # Gemini Model Selection
+        gemini_model_layout = QHBoxLayout()
+        gemini_model_layout.addWidget(QLabel("Gemini Model:"))
+        self.gemini_model_selector = QComboBox()
+        self.gemini_model_selector.addItems(["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "custom"])
+        self.gemini_model_selector.setToolTip("Select the Gemini API model to use.")
+        gemini_model_layout.addWidget(self.gemini_model_selector)
+        layout.addLayout(gemini_model_layout)
+
+        # Custom Gemini Model Input
+        self.custom_gemini_model_input = QLineEdit()
+        self.custom_gemini_model_input.setPlaceholderText("Enter custom model name (e.g., gemini-pro-latest)")
+        self.custom_gemini_model_input.setToolTip("Enter a custom Gemini model name if 'custom' is selected above.")
+        layout.addWidget(self.custom_gemini_model_input)
+
+        self.gemini_model_selector.currentTextChanged.connect(self.on_gemini_model_changed)
+
+        # Load existing settings
+        selected_model = config.get_setting("API_KEYS", "gemini_model", "gemini-1.5-pro")
+        if selected_model in ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]:
+            self.gemini_model_selector.setCurrentText(selected_model)
+            self.custom_gemini_model_input.setVisible(False)
+        else:
+            self.gemini_model_selector.setCurrentText("custom")
+            self.custom_gemini_model_input.setText(selected_model)
+            self.custom_gemini_model_input.setVisible(True)
+
         # Spotify Client ID
         spotify_id_layout = QHBoxLayout()
         spotify_id_layout.addWidget(QLabel("Spotify Client ID:"))
@@ -99,14 +126,44 @@ class SettingsDialog(QDialog):
         spotify_secret_layout.addWidget(self.spotify_secret_input)
         layout.addLayout(spotify_secret_layout)
         
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        button_box.accepted.connect(self.accept)
+
+
+        # System Instructions for AI
+        sysinst_layout = QVBoxLayout()
+        sysinst_layout.addWidget(QLabel("AI System Instructions:"))
+        self.system_instructions_input = QLineEdit()
+        self.system_instructions_input.setPlaceholderText("e.g. You are the AI inside a CD burner app...")
+        self.system_instructions_input.setToolTip("Custom system instructions for the AI assistant.")
+        self.system_instructions_input.setText(config.get_setting("API_KEYS", "system_instructions", "You are the AI assistant inside a CD burner application. You can search for music, download playlists, and assist with burning discs."))
+        sysinst_layout.addWidget(self.system_instructions_input)
+        layout.addLayout(sysinst_layout)
+
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok |
+            QDialogButtonBox.StandardButton.Apply |
+            QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.button(QDialogButtonBox.StandardButton.Apply).clicked.connect(self.apply_settings)
+        button_box.button(QDialogButtonBox.StandardButton.Ok).clicked.connect(self.ok_and_close)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
 
-    def accept(self):
-        """Saves all settings to the config.ini file."""
+    def on_gemini_model_changed(self, text):
+        self.custom_gemini_model_input.setVisible(text == "custom")
+
+
+
+    def apply_settings(self):
+        """Saves all settings to the config.ini file, but does not close the dialog."""
         config.update_setting("API_KEYS", "gemini_api_key", self.gemini_api_key_input.text())
+        if self.gemini_model_selector.currentText() == "custom":
+            config.update_setting("API_KEYS", "gemini_model", self.custom_gemini_model_input.text())
+        else:
+            config.update_setting("API_KEYS", "gemini_model", self.gemini_model_selector.currentText())
         config.update_setting("API_KEYS", "spotify_client_id", self.spotify_id_input.text())
         config.update_setting("API_KEYS", "spotify_client_secret", self.spotify_secret_input.text())
+        config.update_setting("API_KEYS", "system_instructions", self.system_instructions_input.text())
+
+    def ok_and_close(self):
+        self.apply_settings()
         super().accept()
