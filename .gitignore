@@ -1,5 +1,3 @@
-*.pyc
-*.pyc
 config.ini
 *.pyc
 /ui/__pycache__
