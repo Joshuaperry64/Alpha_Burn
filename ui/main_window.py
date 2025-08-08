@@ -44,11 +44,11 @@ class AlphaBurnApp(QMainWindow):
         super().__init__()
         self.setWindowTitle(f"{constants.APP_NAME} v{constants.APP_VERSION}")
         self.setGeometry(100, 100, constants.WINDOW_WIDTH, constants.WINDOW_HEIGHT)
-        
+
         self.download_path = config.get_setting('PATHS', 'DownloadFolder')
         if not os.path.exists(self.download_path):
             os.makedirs(self.download_path)
-        
+
         database.init_db()
         self.download_queue = []
         self.is_batch_downloading = False
@@ -82,6 +82,13 @@ class AlphaBurnApp(QMainWindow):
 
     def open_settings(self):
         SettingsDialog(self).exec()
+
+    # --- THIS IS THE FIX ---
+    # This method was missing, causing the crash on startup.
+    def open_advanced_burn_settings(self):
+        dialog = AdvancedBurnSettingsDialog(self)
+        dialog.exec()
+    # -----------------------
 
     def open_roadmap(self):
         if not os.path.exists("Project Roadmap.txt"):
@@ -167,18 +174,18 @@ class AlphaBurnApp(QMainWindow):
         else: super().keyPressEvent(e)
 
     def add_to_burn_queue_from_index(self, index): self.add_filepath_to_burn_queue(self.library_model.item(index.row(), 6).text())
-    
+
     def add_filepath_to_burn_queue(self, filepath):
         if any(self.burn_queue_list.item(i).data(Qt.ItemDataRole.UserRole) == filepath for i in range(self.burn_queue_list.count())): return
         song_info = database.get_song_by_filepath(filepath)
         if song_info:
             item = QListWidgetItem(f"{song_info[1]} - {song_info[0]}"); item.setData(Qt.ItemDataRole.UserRole, filepath); self.burn_queue_list.addItem(item); self.update_capacity_meter()
-    
+
     def update_capacity_meter(self):
         total_size = sum(os.path.getsize(self.burn_queue_list.item(i).data(Qt.ItemDataRole.UserRole)) for i in range(self.burn_queue_list.count()) if os.path.exists(self.burn_queue_list.item(i).data(Qt.ItemDataRole.UserRole)))
         total_mb = total_size / (1024*1024); cap_mb = 700.0; pct = (total_mb / cap_mb) * 100 if cap_mb > 0 else 0
         self.capacity_progress.setStyleSheet("QProgressBar::chunk { background-color: red; }" if pct > 100 else ""); self.capacity_progress.setValue(int(pct)); self.capacity_label.setText(f"{total_mb:.1f} MB / {cap_mb:.1f} MB ({pct:.1f}%)")
-    
+
     def start_ai_curation(self):
         prompt = self.ai_curator_input.text();
         if not prompt: return
@@ -186,12 +193,12 @@ class AlphaBurnApp(QMainWindow):
         if not api_key: QMessageBox.critical(self, "API Key Missing", "Please set your Gemini API key in File > Settings."); return
         self.statusBar().showMessage(f"Asking Gemini AI: '{prompt}'..."); self.ai_curator_input.setEnabled(False)
         self.ai_worker = AIWorker(prompt, self.library_model, api_key); self.ai_worker.finished.connect(self.on_ai_curation_finished); self.ai_worker.error.connect(self.on_worker_error); self.ai_worker.start()
-    
+
     def on_ai_curation_finished(self, filepaths):
         self.statusBar().showMessage(f"AI selected {len(filepaths)} tracks.", 5000); self.burn_queue_list.clear()
         for path in filepaths: self.add_filepath_to_burn_queue(path)
         self.ai_curator_input.clear(); self.ai_curator_input.setEnabled(True)
-    
+
     def start_burn_process(self):
         if self.burn_queue_list.count() == 0: QMessageBox.warning(self, "Empty Queue", "Burn queue is empty."); return
         drive = self.drive_selector.currentText()
@@ -200,45 +207,45 @@ class AlphaBurnApp(QMainWindow):
         iso_path = os.path.join(os.getcwd(), f"AlphaBurn_{int(time.time())}.iso")
         self.burn_button.setEnabled(False)
         self.burn_worker = BurnWorker(drive, file_list, iso_path); self.burn_worker.finished.connect(self.on_burn_finished); self.burn_worker.error.connect(self.on_worker_error); self.burn_worker.progress.connect(lambda msg: self.statusBar().showMessage(msg)); self.burn_worker.start()
-    
+
     def on_burn_finished(self, message): QMessageBox.information(self, "Success", message); self.statusBar().showMessage(message, 5000); self.burn_button.setEnabled(True)
-    
+
     def start_download_handler(self):
         url = self.url_input.text()
         if not url: return
-        if "open.spotify.com/playlist" in url: self.start_spotify_playlist_download(url)
+        if "https://open.spotify.com/" in url: self.start_spotify_playlist_download(url)
         else: self.download_queue.append(url); self.process_download_queue()
-    
+
     def start_spotify_playlist_download(self, url):
         client_id = config.get_setting("API_KEYS", "spotify_client_id"); client_secret = config.get_setting("API_KEYS", "spotify_client_secret")
         if not client_id or not client_secret: QMessageBox.critical(self, "Spotify Credentials Missing", "Please set Spotify credentials in File > Settings."); return
         self.download_button.setEnabled(False); self.spotify_worker = SpotifyWorker(url, client_id, client_secret); self.spotify_worker.finished.connect(self.on_spotify_playlist_fetched); self.spotify_worker.error.connect(self.on_worker_error); self.spotify_worker.progress.connect(lambda msg: self.statusBar().showMessage(msg)); self.spotify_worker.start()
-    
+
     def on_spotify_playlist_fetched(self, tracks):
         self.statusBar().showMessage(f"Found {len(tracks)} tracks. Starting batch download."); self.download_queue.extend(tracks); self.is_batch_downloading = True; self.process_download_queue()
-    
+
     def process_download_queue(self):
         if self.is_batch_downloading and not self.download_queue:
             self.is_batch_downloading = False; self.download_button.setEnabled(True); QMessageBox.information(self, "Batch Download Complete", "Finished downloading all tracks."); return
         if self.download_queue and self.download_button.isEnabled():
             url = self.download_queue.pop(0); self.statusBar().showMessage(f"Downloading: {url} ({len(self.download_queue)} left)"); self.download_button.setEnabled(False)
             self.worker = DownloadWorker(url, self.download_path); self.worker.finished.connect(self.on_download_finished); self.worker.error.connect(self.on_worker_error); self.worker.start()
-    
+
     def on_download_finished(self, info):
         filepath = info.get('filepath')
         if not filepath or not os.path.exists(filepath): self.on_worker_error(f"File not found for '{info.get('title','')}'."); return
         self.tagger = TaggerWorker(filepath, info.get('title','')); self.tagger.finished.connect(self.on_tagging_finished); self.tagger.error.connect(self.on_worker_error); self.tagger.status_update.connect(lambda msg: self.statusBar().showMessage(msg)); self.tagger.start()
-    
+
     def on_tagging_finished(self, file_path, metadata):
         database.add_song(file_path, metadata); self.load_library_from_db(); self.url_input.clear()
         self.download_button.setEnabled(True)
         if self.is_batch_downloading: QTimer.singleShot(500, self.process_download_queue)
-    
+
     def on_worker_error(self, error_message):
         QMessageBox.critical(self, "Error", f"{error_message}"); self.statusBar().showMessage("Error occurred.", 5000)
         self.download_button.setEnabled(True); self.burn_button.setEnabled(True); self.ai_curator_input.setEnabled(True)
         if self.is_batch_downloading: self.is_batch_downloading = False; self.download_queue.clear(); QMessageBox.warning(self, "Batch Download Halted", "An error occurred, halting the playlist download.")
-    
+
     def save_preset(self):
         if self.burn_queue_list.count() == 0: return
         name, ok = QInputDialog.getText(self, "Save Preset", "Preset name:")
@@ -248,7 +255,7 @@ class AlphaBurnApp(QMainWindow):
             config.update_setting("PRESETS", name, ",".join(paths))
             self._load_presets()
             self.preset_selector.setCurrentText(name)
-    
+
     def delete_preset(self):
         name = self.preset_selector.currentText()
         if name in ["Standard Audio CD", "MP3 CD"]: return
@@ -258,7 +265,7 @@ class AlphaBurnApp(QMainWindow):
             with open(config.CONFIG_FILE, 'w') as configfile:
                 cfg.write(configfile)
             self._load_presets()
-    
+
     def _load_presets(self):
         current = self.preset_selector.currentText()
         self.preset_selector.clear(); self.preset_selector.addItems(["Standard Audio CD", "MP3 CD"])
@@ -266,7 +273,7 @@ class AlphaBurnApp(QMainWindow):
         if cfg.has_section("PRESETS"):
             self.preset_selector.addItems(cfg.options("PRESETS"))
         self.preset_selector.setCurrentText(current if self.preset_selector.findText(current) != -1 else "Standard Audio CD")
-    
+
     def load_preset(self):
         name = self.preset_selector.currentText(); self.burn_queue_list.clear()
         if name not in ["Standard Audio CD", "MP3 CD"]:
