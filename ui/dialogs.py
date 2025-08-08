@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (
     QLineEdit, QPushButton, QComboBox, 
     QCheckBox, QLabel, QDialogButtonBox
 )
-# Import the new config module instead of QSettings
 import config
+import database
 
 class EditSongDialog(QDialog):
     """A dialog for manually editing a song's metadata."""
@@ -13,10 +13,6 @@ class EditSongDialog(QDialog):
         self.setWindowTitle("Edit Metadata")
         self.filepath = filepath
         
-        # This will now need to be updated to use the new database functions
-        # For now, this structure remains the same as it's called from main_window
-        # which will be updated next.
-        import database
         song_data = database.get_song_by_filepath(self.filepath)
         if not song_data:
             self.close()
@@ -37,7 +33,6 @@ class EditSongDialog(QDialog):
         layout.addWidget(button_box, 5, 0, 1, 2)
 
     def accept(self):
-        import database
         new_metadata = {
             'title': self.title_edit.text(), 'artist': self.artist_edit.text(),
             'album': self.album_edit.text(), 'year': self.year_edit.text(),

@@ -35,23 +35,28 @@ class BurnWorker(QThread):
             self.progress.emit(f"Burning {os.path.basename(self.iso_path)} to drive {self.drive}...")
             
             if sys.platform == "win32":
+                # Assumes 'cdburn.exe' is in the system PATH or project root
                 command = ['cdburn', self.drive, self.iso_path]
             elif sys.platform == "linux":
                 command = ['wodim', '-v', f'dev={self.drive}', self.iso_path]
             else:
                 raise NotImplementedError("Burning is not supported on this OS.")
 
-            # For now, we simulate. Uncomment the subprocess call for real burning.
-            self.progress.emit("SIMULATING BURN: Command would be: " + " ".join(command))
-            time.sleep(10)
-            
             # --- REAL BURN LOGIC ---
-            # process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
-            # while True:
-            #     output = process.stdout.readline()
-            #     if output == '' and process.poll() is not None: break
-            #     if output: self.progress.emit(output.strip())
-            # if process.poll() != 0: raise subprocess.CalledProcessError(process.poll(), command, stderr=process.stderr.read())
+            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0)
+            
+            # Real-time progress reporting from the command line tool
+            while True:
+                output = process.stdout.readline()
+                if output == '' and process.poll() is not None:
+                    break
+                if output:
+                    self.progress.emit(output.strip())
+            
+            return_code = process.poll()
+            if return_code != 0:
+                stderr_output = process.stderr.read()
+                raise subprocess.CalledProcessError(return_code, command, stderr=stderr_output)
             
             self.finished.emit("Burn completed successfully.")
 
@@ -63,4 +68,7 @@ class BurnWorker(QThread):
             self.error.emit(f"An error occurred during burning: {e}")
         finally:
             if os.path.exists(self.iso_path):
-                os.remove(self.iso_path)
+                try:
+                    os.remove(self.iso_path)
+                except OSError as e:
+                    self.progress.emit(f"Could not remove temporary ISO file: {e}")

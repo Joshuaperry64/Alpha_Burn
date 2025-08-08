@@ -4,9 +4,10 @@ import mutagen
 from mutagen.mp3 import MP3
 from mutagen.id3 import ID3, APIC, TIT2, TPE1, TALB, TDRC, TCON, TRCK
 from PyQt6.QtCore import QThread, pyqtSignal
-import config # Use the new config module
+import config
+import constants
 
-mb.set_useragent("Alpha_Burn", "1.6", "https://github.com/josh-perry/alpha_burn")
+mb.set_useragent(constants.APP_NAME, constants.APP_VERSION, "https://github.com/josh-perry/alpha_burn")
 
 class TaggerWorker(QThread):
     finished = pyqtSignal(str, dict)
@@ -17,7 +18,7 @@ class TaggerWorker(QThread):
         super().__init__()
         self.file_path = file_path
         self.title = original_title
-        self.artwork_cache_path = config.get_setting('PATHS', 'artworkcache')
+        self.artwork_cache_path = config.get_setting('PATHS', 'ArtworkCache')
         if not os.path.exists(self.artwork_cache_path):
             os.makedirs(self.artwork_cache_path)
 
@@ -73,3 +74,4 @@ class TaggerWorker(QThread):
             self.finished.emit(self.file_path, meta)
         except Exception as e:
             self.error.emit(f"Tagging failed for '{self.title}': {e}")
+

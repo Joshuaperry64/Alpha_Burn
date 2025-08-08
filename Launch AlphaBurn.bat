@@ -1,2 +1,2 @@
-python AlphaBurn.py
-pause
+@echo off
+start "" pythonw AlphaBurn.py

@@ -5,6 +5,7 @@ from PyQt6.QtCore import Qt
 
 # We now import the main window from its own module
 from ui.main_window import AlphaBurnApp
+import constants
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
@@ -14,7 +15,7 @@ if __name__ == '__main__':
     splash_pix = QPixmap(300, 200)
     splash_pix.fill(Qt.GlobalColor.darkGray)
     splash = QSplashScreen(splash_pix)
-    splash.showMessage("Loading Alpha_Burn...", Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom, Qt.GlobalColor.white)
+    splash.showMessage(f"Loading {constants.APP_NAME}...", Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignBottom, Qt.GlobalColor.white)
     splash.show()
     app.processEvents()
     
@@ -22,3 +23,4 @@ if __name__ == '__main__':
     splash.finish(main_app)
     main_app.show()
     sys.exit(app.exec())
+

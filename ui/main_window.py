@@ -18,8 +18,11 @@ from workers.tagger_worker import TaggerWorker
 from workers.burn_worker import BurnWorker
 from workers.ai_worker import AIWorker
 from workers.spotify_worker import SpotifyWorker
+from workers.library_worker import LibraryWorker
 import database
-import config # Use the new config module
+import config
+import constants
+from .ui_setup import UiSetup
 
 class StarRatingDelegate(QStyledItemDelegate):
     """A custom delegate to display integer ratings as stars."""
@@ -29,7 +32,7 @@ class StarRatingDelegate(QStyledItemDelegate):
             if rating is not None:
                 rating = int(rating)
                 painter.save()
-                painter.setPen(QColor(255, 204, 0)) # Gold color
+                painter.setPen(QColor(constants.STAR_COLOR))
                 for i in range(5):
                     painter.drawText(option.rect.x() + i * 15, option.rect.y() + 15, "★" if i < rating else "☆")
                 painter.restore()
@@ -39,11 +42,10 @@ class StarRatingDelegate(QStyledItemDelegate):
 class AlphaBurnApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Alpha_Burn v1.0")
-        self.setGeometry(100, 100, 1400, 900)
+        self.setWindowTitle(f"{constants.APP_NAME} v{constants.APP_VERSION}")
+        self.setGeometry(100, 100, constants.WINDOW_WIDTH, constants.WINDOW_HEIGHT)
         
-        # Use config for download path
-        self.download_path = config.get_setting('PATHS', 'downloadfolder')
+        self.download_path = config.get_setting('PATHS', 'DownloadFolder')
         if not os.path.exists(self.download_path):
             os.makedirs(self.download_path)
         
@@ -51,13 +53,11 @@ class AlphaBurnApp(QMainWindow):
         self.download_queue = []
         self.is_batch_downloading = False
 
-        self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
-        self.main_layout = QVBoxLayout(self.central_widget)
+        self.ui_setup = UiSetup(self)
+        self.ui_setup.setup_ui()
 
         self._create_actions()
         self._create_menus()
-        self._setup_ui()
         self._setup_library_model()
         self.load_library_from_db()
         self._populate_drives()
@@ -84,11 +84,11 @@ class AlphaBurnApp(QMainWindow):
         SettingsDialog(self).exec()
 
     def open_roadmap(self):
-        if not os.path.exists("roadmap.txt"):
-            QMessageBox.warning(self, "File Not Found", "roadmap.txt not found.")
+        if not os.path.exists("Project Roadmap.txt"):
+            QMessageBox.warning(self, "File Not Found", "Project Roadmap.txt not found.")
             return
-        try: os.startfile("roadmap.txt")
-        except: QMessageBox.critical(self, "Error", "Could not open roadmap.txt.")
+        try: os.startfile("Project Roadmap.txt")
+        except: QMessageBox.critical(self, "Error", "Could not open Project Roadmap.txt.")
 
     def _setup_library_model(self):
         self.library_model = QStandardItemModel(0, 7)
@@ -99,7 +99,10 @@ class AlphaBurnApp(QMainWindow):
         self.library_table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self.library_table.setColumnHidden(6, True)
         self.library_table.horizontalHeader().setStretchLastSection(True)
-        self.library_table.setColumnWidth(0, 250); self.library_table.setColumnWidth(1, 150); self.library_table.setColumnWidth(2, 200); self.library_table.setColumnWidth(5, 80)
+        self.library_table.setColumnWidth(0, constants.TITLE_WIDTH)
+        self.library_table.setColumnWidth(1, constants.ARTIST_WIDTH)
+        self.library_table.setColumnWidth(2, constants.ALBUM_WIDTH)
+        self.library_table.setColumnWidth(5, constants.RATING_WIDTH)
 
     def load_library_from_db(self):
         self.library_model.removeRows(0, self.library_model.rowCount())
@@ -110,48 +113,24 @@ class AlphaBurnApp(QMainWindow):
         self.statusBar().showMessage(f"Library loaded with {len(songs)} tracks.", 3000)
 
     def rescan_library_folder(self):
-        from mutagen.mp3 import MP3
-        from mutagen.id3 import ID3
-        self.statusBar().showMessage("Scanning library folder...")
-        all_db_songs = {song[-1] for song in database.get_all_songs()}
-        found_new = 0
-        for filename in os.listdir(self.download_path):
-            if filename.endswith(".mp3"):
-                filepath = os.path.join(self.download_path, filename)
-                if filepath not in all_db_songs:
-                    try:
-                        audio = MP3(filepath, ID3=ID3)
-                        metadata = {'title': str(audio.get('TIT2', [''])[0]), 'artist': str(audio.get('TPE1', [''])[0]), 'album': str(audio.get('TALB', [''])[0]), 'year': str(audio.get('TDRC', [''])[0]), 'genre': str(audio.get('TCON', [''])[0])}
-                        database.add_song(filepath, metadata)
-                        found_new += 1
-                    except: continue
+        self.rescan_library_action.setEnabled(False)
+        self.library_worker = LibraryWorker(self.download_path)
+        self.library_worker.finished.connect(self.on_library_scan_finished)
+        self.library_worker.status_update.connect(self.statusBar().showMessage)
+        self.library_worker.start()
+
+    def on_library_scan_finished(self, found_new):
         if found_new > 0:
             QMessageBox.information(self, "Rescan Complete", f"Found and added {found_new} new tracks.")
             self.load_library_from_db()
         else:
             QMessageBox.information(self, "Rescan Complete", "No new tracks were found.")
         self.statusBar().showMessage("Ready.", 3000)
+        self.rescan_library_action.setEnabled(True)
 
     def _populate_drives(self):
         # ... (same as before) ...
         pass
-
-    def _setup_ui(self):
-        top_bar = QHBoxLayout(); self.url_input = QLineEdit(placeholderText="Enter URL or Spotify Playlist..."); top_bar.addWidget(self.url_input); self.download_button = QPushButton("Download"); top_bar.addWidget(self.download_button); self.ai_curator_input = QLineEdit(placeholderText="Ask Gemini AI..."); top_bar.addWidget(self.ai_curator_input, 1); self.main_layout.addLayout(top_bar)
-        splitter = QSplitter(Qt.Orientation.Horizontal); self.main_layout.addWidget(splitter, 1)
-        left_pane = QFrame(); left_layout = QVBoxLayout(left_pane); self.library_table = QTableView(); left_layout.addWidget(self.library_table); splitter.addWidget(left_pane)
-        right_pane = QFrame(); right_layout = QVBoxLayout(right_pane)
-        drive_layout = QHBoxLayout(); drive_layout.addWidget(QLabel("Drive:")); self.drive_selector = QComboBox(); drive_layout.addWidget(self.drive_selector); drive_layout.addWidget(QLabel("Preset:")); self.preset_selector = QComboBox(); drive_layout.addWidget(self.preset_selector); right_layout.addLayout(drive_layout)
-        preset_btn_layout = QHBoxLayout(); self.save_preset_button = QPushButton("Save Preset"); preset_btn_layout.addWidget(self.save_preset_button); self.delete_preset_button = QPushButton("Delete Preset"); preset_btn_layout.addWidget(self.delete_preset_button); right_layout.addLayout(preset_btn_layout)
-        self.burn_queue_list = QListWidget(); right_layout.addWidget(self.burn_queue_list)
-        cap_layout = QHBoxLayout(); self.capacity_label = QLabel("0.0 MB / 700.0 MB (0%)"); cap_layout.addWidget(self.capacity_label); self.capacity_progress = QProgressBar(); cap_layout.addWidget(self.capacity_progress); right_layout.addLayout(cap_layout)
-        burn_ctrl_layout = QHBoxLayout(); self.advanced_burn_button = QPushButton("Advanced..."); burn_ctrl_layout.addStretch(); burn_ctrl_layout.addWidget(self.advanced_burn_button); self.burn_button = QPushButton("Burn Disc"); self.burn_button.setStyleSheet("background-color: #4CAF50;"); burn_ctrl_layout.addWidget(self.burn_button); right_layout.addLayout(burn_ctrl_layout)
-        splitter.addWidget(right_pane)
-        
-        self.library_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.library_table.customContextMenuRequested.connect(self.show_library_context_menu)
-        self.library_table.doubleClicked.connect(self.add_to_burn_queue_from_index); self.download_button.clicked.connect(self.start_download_handler); self.save_preset_button.clicked.connect(self.save_preset); self.delete_preset_button.clicked.connect(self.delete_preset); self.preset_selector.activated.connect(self.load_preset); self.advanced_burn_button.clicked.connect(self.open_advanced_burn_settings); self.burn_button.clicked.connect(self.start_burn_process); self.ai_curator_input.returnPressed.connect(self.start_ai_curation)
-        self._load_presets()
 
     def show_library_context_menu(self, position):
         indexes = self.library_table.selectionModel().selectedRows()
