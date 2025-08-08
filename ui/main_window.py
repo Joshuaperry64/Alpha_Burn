@@ -160,6 +160,7 @@ class AlphaBurnApp(QMainWindow):
         super().showEvent(event)
         self.showMaximized()
     def __init__(self):
+        self.gemini_chat_session = None  # Defensive: always define first
         super().__init__()
         self.setWindowTitle(f"{constants.APP_NAME} v{constants.APP_VERSION}")
         self.showMaximized()
@@ -467,6 +468,10 @@ class AlphaBurnApp(QMainWindow):
         prompt = self.chat_input.text()
         if not prompt:
             return
+
+        # Defensive: ensure attribute always exists
+        if not hasattr(self, 'gemini_chat_session'):
+            self.gemini_chat_session = None
 
         if self.gemini_chat_session is None:
             QMessageBox.warning(self, "Gemini Offline", "The AI assistant is not configured. Please set your API key in the settings.")
