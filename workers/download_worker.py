@@ -26,8 +26,9 @@ class DownloadWorker(QThread):
                 'progress_hooks': [self.progress.emit]
             }
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                # The info dictionary will contain the final filepath after postprocessing.
+                # The original code's manual manipulation of this was buggy and has been removed.
                 info = ydl.extract_info(self.url, download=True)
-                info['filepath'] = ydl.prepare_filename(info).replace('.webm', '.mp3').replace('.m4a', '.mp3')
                 self.finished.emit(info)
         except Exception as e:
             self.error.emit(str(e))

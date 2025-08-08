@@ -83,12 +83,9 @@ class AlphaBurnApp(QMainWindow):
     def open_settings(self):
         SettingsDialog(self).exec()
 
-    # --- THIS IS THE FIX ---
-    # This method was missing, causing the crash on startup.
     def open_advanced_burn_settings(self):
         dialog = AdvancedBurnSettingsDialog(self)
         dialog.exec()
-    # -----------------------
 
     def open_roadmap(self):
         if not os.path.exists("Project Roadmap.txt"):
@@ -136,7 +133,7 @@ class AlphaBurnApp(QMainWindow):
         self.rescan_library_action.setEnabled(True)
 
     def _populate_drives(self):
-        # ... (same as before) ...
+        # This function can be implemented to find available optical drives
         pass
 
     def show_library_context_menu(self, position):
@@ -194,10 +191,31 @@ class AlphaBurnApp(QMainWindow):
         self.statusBar().showMessage(f"Asking Gemini AI: '{prompt}'..."); self.ai_curator_input.setEnabled(False)
         self.ai_worker = AIWorker(prompt, self.library_model, api_key); self.ai_worker.finished.connect(self.on_ai_curation_finished); self.ai_worker.error.connect(self.on_worker_error); self.ai_worker.start()
 
-    def on_ai_curation_finished(self, filepaths):
-        self.statusBar().showMessage(f"AI selected {len(filepaths)} tracks.", 5000); self.burn_queue_list.clear()
-        for path in filepaths: self.add_filepath_to_burn_queue(path)
-        self.ai_curator_input.clear(); self.ai_curator_input.setEnabled(True)
+    def on_ai_curation_finished(self, result):
+        result_type = result.get("type")
+        data = result.get("data")
+
+        if not data:
+            self.statusBar().showMessage("AI returned no results.", 5000)
+            self.ai_curator_input.clear()
+            self.ai_curator_input.setEnabled(True)
+            return
+
+        if result_type == "curation_list":
+            self.statusBar().showMessage(f"AI curated {len(data)} tracks from your library.", 5000)
+            self.burn_queue_list.clear()
+            for path in data:
+                self.add_filepath_to_burn_queue(path)
+        
+        elif result_type == "download_list":
+            playlist_name = result.get("playlist_name", "AI-Generated Playlist")
+            self.statusBar().showMessage(f"AI found '{playlist_name}' with {len(data)} tracks. Starting batch download.")
+            self.download_queue.extend(data)
+            self.is_batch_downloading = True
+            self.process_download_queue()
+
+        self.ai_curator_input.clear()
+        self.ai_curator_input.setEnabled(True)
 
     def start_burn_process(self):
         if self.burn_queue_list.count() == 0: QMessageBox.warning(self, "Empty Queue", "Burn queue is empty."); return
@@ -213,7 +231,7 @@ class AlphaBurnApp(QMainWindow):
     def start_download_handler(self):
         url = self.url_input.text()
         if not url: return
-        if "https://open.spotify.com/" in url: self.start_spotify_playlist_download(url)
+        if "spotify.com/playlist/" in url: self.start_spotify_playlist_download(url)
         else: self.download_queue.append(url); self.process_download_queue()
 
     def start_spotify_playlist_download(self, url):
@@ -232,8 +250,15 @@ class AlphaBurnApp(QMainWindow):
             self.worker = DownloadWorker(url, self.download_path); self.worker.finished.connect(self.on_download_finished); self.worker.error.connect(self.on_worker_error); self.worker.start()
 
     def on_download_finished(self, info):
-        filepath = info.get('filepath')
-        if not filepath or not os.path.exists(filepath): self.on_worker_error(f"File not found for '{info.get('title','')}'."); return
+        title = info.get('title', 'Unknown Title')
+        expected_filepath = os.path.join(self.download_path, f"{title}.mp3")
+
+        if not os.path.exists(expected_filepath):
+            self.on_worker_error(f"File not found for '{title}'.")
+            return
+        
+        filepath = expected_filepath
+        
         self.tagger = TaggerWorker(filepath, info.get('title','')); self.tagger.finished.connect(self.on_tagging_finished); self.tagger.error.connect(self.on_worker_error); self.tagger.status_update.connect(lambda msg: self.statusBar().showMessage(msg)); self.tagger.start()
 
     def on_tagging_finished(self, file_path, metadata):
@@ -250,7 +275,6 @@ class AlphaBurnApp(QMainWindow):
         if self.burn_queue_list.count() == 0: return
         name, ok = QInputDialog.getText(self, "Save Preset", "Preset name:")
         if ok and name:
-            # Presets are now saved to the config file
             paths = [self.burn_queue_list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.burn_queue_list.count())]
             config.update_setting("PRESETS", name, ",".join(paths))
             self._load_presets()
